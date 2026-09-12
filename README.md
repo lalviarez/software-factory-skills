@@ -15,5 +15,6 @@
 
 ## Licencia
 
+Copyright (c) 2026 Leonardo Javier Alviarez Hernández.
 
----
+[GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html): uso libre para cualquier fin (comercial o no); toda distribución de copias o modificaciones debe realizarse bajo esta misma licencia; el uso particular o interno no distribuido no genera obligaciones.
