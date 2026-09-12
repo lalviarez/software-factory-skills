@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Leonardo Javier Alviarez Hernández
+#
+# Release automática: al hacer push/merge a main, si CHANGELOG.md declara una
+# versión (## [X.Y.Z] - fecha) que aún no tiene tag vX.Y.Z, crea el tag y la
+# GitHub Release con las notas extraídas de esa sección del changelog.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Detectar versión pendiente en CHANGELOG.md
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -m1 -E '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+          if [ -z "$VERSION" ]; then
+            echo "No hay versión declarada en CHANGELOG.md; nada que liberar."
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "El tag v$VERSION ya existe; nada que liberar."
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Versión pendiente de liberar: v$VERSION"
+            {
+              echo "pending=true"
+              echo "version=$VERSION"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validar consistencia con las skills
+        if: steps.version.outputs.pending == 'true'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          status=0
+          for skill_md in skills/*/SKILL.md; do
+            SKILL_VERSION=$(awk '/^metadata:/{in_metadata=1; next} /^---/{in_metadata=0} in_metadata && /^  version:/{gsub(/[" ]/, "", $2); print $2; exit}' "$skill_md")
+            if [ -z "$SKILL_VERSION" ]; then
+              echo "::error file=$skill_md::No se encontró metadata.version en el frontmatter de $skill_md." >&2
+              status=1
+            elif [ "$SKILL_VERSION" != "$VERSION" ]; then
+              echo "::error file=$skill_md::metadata.version=$SKILL_VERSION en $skill_md no coincide con la versión $VERSION declarada en CHANGELOG.md." >&2
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Extraer notas de la versión
+        if: steps.version.outputs.pending == 'true'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          awk -v v="## [$VERSION]" '
+            index($0, v) == 1 { capture = 1; next }
+            capture && /^## \[/ { exit }
+            capture { print }
+          ' CHANGELOG.md > release-notes.md
+          sed -i -e '/./,$!d' release-notes.md
+          test -s release-notes.md
+
+      - name: Crear tag y GitHub Release
+        if: steps.version.outputs.pending == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes-file release-notes.md \
+            --target "$GITHUB_SHA"
