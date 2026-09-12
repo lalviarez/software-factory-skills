@@ -6,9 +6,9 @@
 
 ## Skills
 
-| Skill | Descripción | Argumento |
-| --- | --- | --- |
-| `/user-story-create` | Crea una historia de usuario en base a una idea o requerimiento | — |
+| Skill | Descripción | Argumento | Estado |
+| --- | --- | --- | --- |
+| `/user-story-create` | Crea una historia de usuario en base a una idea o requerimiento | idea o requerimiento | En desarrollo — inestable, uso bajo propio riesgo |
 
 ---
 
